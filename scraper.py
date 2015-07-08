@@ -3,6 +3,8 @@ from __future__ import unicode_literals
 from bs4 import BeautifulSoup
 import requests
 import sys
+import geocoder
+import json
 
 
 DOMAIN = 'http://info.kingcounty.gov/'
@@ -121,7 +123,7 @@ def extract_score_data(element):
     return data
 
 
-def generate_results(test=False):
+def generate_results(test=False, count=10):
     if len(sys.argv) > 1 and sys.argv[1] == "Test":
         c, e = load_inspection_page()
     else:
@@ -131,14 +133,44 @@ def generate_results(test=False):
         )
     soup = parse_source(c, e)
     listings = extract_data_listings(soup)
-    for listing in listings:
+    for listing in listings[:count]:
         meta_data = extract_restaurant_metadata(listing)
         score_data = extract_score_data(listing)
         meta_data.update(score_data)
         yield meta_data
 
 
+def get_geojson(result):
+    address = ' '.join(result.get('Address', ''))
+    if not address:
+        return None
+    response = geocoder.google(address)
+    geojson = response.geojson
+    inspection_data = {}
+    use_keys = (
+        'Business Name', 'Average Score', 'Total Inspections', 'High Score',
+        'Address',
+    )
+    for key, val in result.items():
+        if key not in use_keys:
+            continue
+        if isinstance(val, list):
+            val = ' '.join(val)
+        inspection_data[key] = val
+    new_address = geojson['properties'].get('address')
+    if new_address:
+        inspection_data['Address'] = new_address
+    geojson['properties'] = inspection_data
+    return geojson
+
+
 if __name__ == '__main__':
+    from pprint import pprint
     test = len(sys.argv) > 1 and sys.argv[1] == 'test'
+    total_result = {'type': 'FeatureCollection', 'features': []}
     for result in generate_results(test):
-        print result
+        geo_result = get_geojson(result)
+        pprint(geo_result)
+        total_result['features'].append(geo_result)
+    with open('my_map.json', 'w') as fh:
+        json.dump(total_result, fh)
