@@ -121,7 +121,7 @@ def extract_score_data(element):
     return data
 
 
-if __name__ == '__main__':
+def generate_results(test=False):
     if len(sys.argv) > 1 and sys.argv[1] == "Test":
         c, e = load_inspection_page()
     else:
@@ -134,5 +134,11 @@ if __name__ == '__main__':
     for listing in listings:
         meta_data = extract_restaurant_metadata(listing)
         score_data = extract_score_data(listing)
-        full_data = meta_data.update(score_data)
-        print(meta_data)
+        meta_data.update(score_data)
+        yield meta_data
+
+
+if __name__ == '__main__':
+    test = len(sys.argv) > 1 and sys.argv[1] == 'test'
+    for result in generate_results(test):
+        print result
